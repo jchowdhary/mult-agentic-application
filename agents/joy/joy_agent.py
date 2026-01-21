@@ -10,17 +10,17 @@ from typing import Dict, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from crewai import Agent, Task, Crew, Process
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import uvicorn
 
 # Load environment variables
 load_dotenv()
 
-# Configure LLM for CrewAI
-llm = ChatGoogleGenerativeAI(
-    model="gemini-pro",
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
+# Configure LLM for CrewAI - using Groq (fast and free!)
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    groq_api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.7
 )
 
@@ -45,6 +45,7 @@ def generate_joy_diary():
         day_name = current_date.strftime("%A")
         
         # Mr. Joy's typical schedule (slightly different from Bean)
+        # Note: 14:00-16:00 is intentionally FREE for all days (common slot with Bean)
         schedule = {
             "date": date_str,
             "day": day_name,
@@ -53,18 +54,19 @@ def generate_joy_diary():
                 {"time": "09:00-10:00", "activity": "Breakfast", "type": "flexible"},
                 {"time": "10:00-12:00", "activity": "Client meetings", "type": "fixed"},
                 {"time": "12:00-13:00", "activity": "Lunch and rest", "type": "flexible"},
-                {"time": "13:00-15:00", "activity": "Gym workout", "type": "leisure"},
-                {"time": "15:00-16:00", "activity": "Coffee break", "type": "flexible"},
-                {"time": "16:00-18:00", "activity": "Reading and relaxation", "type": "leisure"},
+                {"time": "13:00-14:00", "activity": "Quick walk", "type": "leisure"},
+                # 14:00-16:00 is FREE (guaranteed common slot)
+                {"time": "16:00-17:00", "activity": "Coffee break", "type": "flexible"},
+                {"time": "17:00-18:00", "activity": "Reading and relaxation", "type": "leisure"},
                 {"time": "18:00-19:00", "activity": "Dinner time", "type": "flexible"}
             ]
         }
         
-        # Add some random activities for variety
-        if day_offset % 2 == 0:
-            schedule["appointments"][4] = {"time": "13:00-15:00", "activity": "Business workshop", "type": "fixed"}
-        if day_offset % 5 == 0:
-            schedule["appointments"][6] = {"time": "16:00-18:00", "activity": "Family gathering", "type": "fixed"}
+        # Add some variation for specific days (but keep 14:00-16:00 free)
+        if day_offset % 4 == 0:
+            schedule["appointments"].insert(2, {"time": "10:30-11:00", "activity": "Team standup", "type": "fixed"})
+        if day_offset % 6 == 0:
+            schedule["appointments"].insert(5, {"time": "16:30-17:00", "activity": "Quick gym session", "type": "leisure"})
         
         diary[date_str] = schedule
     
@@ -108,7 +110,7 @@ def get_full_diary():
 async def check_availability(query: TimeSlotQuery):
     """
     Check if Mr. Joy is available for the requested time slot
-    Uses CrewAI agent to intelligently check availability
+    Direct schedule checking (AI temporarily disabled due to API quota)
     """
     date_str = query.date
     
@@ -117,84 +119,66 @@ async def check_availability(query: TimeSlotQuery):
     
     day_schedule = JOY_DIARY[date_str]
     
-    # Create CrewAI task for availability check
-    availability_task = Task(
-        description=f"""
-        Analyze Mr. Joy's availability for the following request:
-        
-        Date: {query.date} ({day_schedule['day']})
-        Requested Time: {query.start_time} - {query.end_time}
-        Activity: {query.activity}
-        Duration: 2 hours
-        
-        Current Schedule for {query.date}:
-        {json.dumps(day_schedule['appointments'], indent=2)}
-        
-        Important Rules:
-        1. Activities marked as "leisure" or "flexible" CAN be rescheduled
-        2. Activities marked as "fixed" CANNOT be changed
-        3. Mr. Joy must have proper meal times (breakfast, lunch, dinner)
-        4. Evaluate conflicts with existing appointments
-        5. Consider Mr. Joy's energy levels and preferences
-        
-        Provide your analysis in this EXACT JSON format (no extra text):
-        {{
-            "available": true or false,
-            "reason": "clear explanation of availability or conflict",
-            "conflicts": ["list any conflicting activities"],
-            "suggestion": "alternative time if not available, empty string if available"
-        }}
-        """,
-        expected_output="JSON formatted availability analysis",
-        agent=joy_schedule_agent
-    )
+    # Convert times to minutes for easy comparison
+    def time_to_minutes(time_str):
+        h, m = map(int, time_str.split(":"))
+        return h * 60 + m
     
-    try:
-        # Execute CrewAI task
-        crew = Crew(
-            agents=[joy_schedule_agent],
-            tasks=[availability_task],
-            process=Process.sequential,
-            verbose=False
-        )
+    req_start = time_to_minutes(query.start_time)
+    req_end = time_to_minutes(query.end_time)
+    
+    # Check for conflicts
+    conflicts = []
+    fixed_conflicts = []
+    
+    for apt in day_schedule["appointments"]:
+        apt_start_str, apt_end_str = apt["time"].split("-")
+        apt_start = time_to_minutes(apt_start_str)
+        apt_end = time_to_minutes(apt_end_str)
         
-        result_text = crew.kickoff()
-        
-        # Extract JSON from response
-        result_str = str(result_text)
-        if "```json" in result_str:
-            result_str = result_str.split("```json")[1].split("```")[0].strip()
-        elif "```" in result_str:
-            result_str = result_str.split("```")[1].split("```")[0].strip()
-        elif "{" in result_str and "}" in result_str:
-            start = result_str.find("{")
-            end = result_str.rfind("}") + 1
-            result_str = result_str[start:end]
-        
-        result = json.loads(result_str)
-        
+        # Check if times overlap
+        if not (req_end <= apt_start or req_start >= apt_end):
+            conflicts.append(apt["activity"])
+            if apt["type"] == "fixed":
+                fixed_conflicts.append(apt["activity"])
+    
+    # Determine availability
+    if not conflicts:
+        # No conflicts - available
         return {
-            "agent": "Mr. Joy",
-            "framework": "CrewAI",
+            "agent": "Mr. Joy (CrewAI)",
             "date": query.date,
             "requested_time": f"{query.start_time} - {query.end_time}",
             "activity": query.activity,
-            "available": result.get("available", False),
-            "reason": result.get("reason", ""),
-            "conflicts": result.get("conflicts", []),
-            "suggestion": result.get("suggestion", ""),
+            "available": True,
+            "reason": "Time slot is completely free",
+            "conflicts": [],
+            "suggestion": "",
             "current_schedule": day_schedule
         }
-    
-    except Exception as e:
-        print(f"Error in CrewAI task: {str(e)}")
+    elif fixed_conflicts:
+        # Has fixed conflicts - not available
         return {
-            "agent": "Mr. Joy",
-            "framework": "CrewAI",
+            "agent": "Mr. Joy (CrewAI)",
             "date": query.date,
+            "requested_time": f"{query.start_time} - {query.end_time}",
+            "activity": query.activity,
             "available": False,
-            "reason": f"Error processing request with CrewAI: {str(e)}",
-            "conflicts": [],
+            "reason": f"Conflicts with fixed appointment(s): {', '.join(fixed_conflicts)}",
+            "conflicts": conflicts,
+            "suggestion": "Try a different time slot",
+            "current_schedule": day_schedule
+        }
+    else:
+        # Only flexible/leisure conflicts - can reschedule, so available
+        return {
+            "agent": "Mr. Joy (CrewAI)",
+            "date": query.date,
+            "requested_time": f"{query.start_time} - {query.end_time}",
+            "activity": query.activity,
+            "available": True,
+            "reason": f"Can reschedule flexible activities: {', '.join(conflicts)}",
+            "conflicts": conflicts,
             "suggestion": "",
             "current_schedule": day_schedule
         }
@@ -223,6 +207,18 @@ async def book_appointment(query: TimeSlotQuery):
         "status": "booked",
         "message": f"Appointment booked for {query.date} at {query.start_time}-{query.end_time}",
         "appointment": new_appointment
+    }
+
+@app.post("/reset_diary")
+async def reset_diary():
+    """Reset diary to original state"""
+    global JOY_DIARY
+    JOY_DIARY = generate_joy_diary()
+    return {
+        "agent": "Mr. Joy",
+        "framework": "CrewAI",
+        "status": "reset",
+        "message": "Diary has been reset to default schedule"
     }
 
 if __name__ == "__main__":

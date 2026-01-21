@@ -20,7 +20,7 @@ load_dotenv()
 
 # Configure LLM
 llm = ChatGoogleGenerativeAI(
-    model="gemini-pro",
+    model="models/gemini-2.5-flash",
     google_api_key=os.getenv("GOOGLE_API_KEY"),
     temperature=0.3
 )
@@ -145,9 +145,10 @@ def check_bean_availability(state: OrganizerState) -> OrganizerState:
     bean_available = []
     
     # Check a subset of potential slots (first 30 to avoid too many API calls)
-    for slot in state.get("bean_diary", {}).keys()[:5]:  # Check first 5 days
+    bean_dates = list(state.get("bean_diary", {}).keys())[:5]  # Check first 5 days
+    for slot in bean_dates:
         time_windows = [
-            ("09:00", "11:00"), ("13:00", "15:00"), ("16:00", "18:00")
+            ("09:00", "11:00"), ("13:00", "15:00"), ("14:00", "16:00"), ("16:00", "18:00")
         ]
         
         for start, end in time_windows:

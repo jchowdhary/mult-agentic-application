@@ -50,22 +50,59 @@ st.markdown("""
         font-weight: bold;
     }
     .appointment {
-        padding: 0.5rem;
-        margin: 0.3rem 0;
-        border-left: 4px solid #3498db;
-        background-color: #ecf0f1;
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        border-left: 5px solid #3498db;
+        background-color: #ffffff;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        color: #2c3e50;
+        font-size: 1rem;
+        font-weight: 500;
     }
     .appointment-leisure {
-        border-left-color: #2ecc71;
+        border-left-color: #27ae60;
+        background-color: #e8f8f5;
+        color: #0e6251;
     }
     .appointment-flexible {
         border-left-color: #f39c12;
+        background-color: #fef5e7;
+        color: #7d6608;
     }
     .appointment-fixed {
         border-left-color: #e74c3c;
+        background-color: #fadbd8;
+        color: #922b21;
     }
     .appointment-booked {
         border-left-color: #9b59b6;
+        background-color: #f4ecf7;
+        color: #512e5f;
+        font-weight: 600;
+    }
+    /* Style for dataframes in Results tab */
+    .stDataFrame {
+        font-size: 1rem;
+    }
+    /* Better table styling */
+    table {
+        color: #2c3e50 !important;
+    }
+    thead tr th {
+        background-color: #3498db !important;
+        color: white !important;
+        font-weight: bold !important;
+        padding: 12px !important;
+    }
+    tbody tr td {
+        background-color: #ffffff !important;
+        color: #2c3e50 !important;
+        padding: 10px !important;
+        border-bottom: 1px solid #ecf0f1 !important;
+    }
+    tbody tr:hover td {
+        background-color: #e8f4f8 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -102,6 +139,25 @@ def schedule_badminton():
         return None
     except Exception as e:
         return {"error": str(e)}
+
+def time_overlaps(apt_time, start, end):
+    """Check if an appointment time overlaps with a target slot"""
+    try:
+        apt_start, apt_end = apt_time.split("-")
+        # Convert to minutes for comparison
+        def to_minutes(time_str):
+            h, m = map(int, time_str.split(":"))
+            return h * 60 + m
+        
+        apt_start_min = to_minutes(apt_start)
+        apt_end_min = to_minutes(apt_end)
+        target_start_min = to_minutes(start)
+        target_end_min = to_minutes(end)
+        
+        # Check for overlap
+        return not (apt_end_min <= target_start_min or apt_start_min >= target_end_min)
+    except:
+        return False
 
 def display_schedule(diary_data, agent_name, color):
     """Display agent's schedule in a nice format"""
@@ -173,7 +229,7 @@ def main():
             st.rerun()
     
     # Main content tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Home", "📅 Schedules", "🏸 Schedule Match", "📊 Results"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Home", "📅 Schedules", "🏸 Schedule Match", "📊 Results", "🧪 Test Data"])
     
     with tab1:
         st.header("Welcome to Multi-Agent Scheduler")
@@ -296,8 +352,76 @@ python agents/joy/joy_agent.py
         else:
             st.success("✅ All systems ready!")
             
+            # Add common schedule viewer
+            st.markdown("---")
+            st.subheader("🔍 View Common Free Slots")
+            st.markdown("Check which time slots are free for BOTH agents before scheduling.")
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                # Date range selector
+                date_option = st.radio(
+                    "Select date range:",
+                    ["Next 3 days", "Next 7 days", "All 10 days"],
+                    horizontal=True
+                )
+            
+            with col2:
+                if st.button("🔎 Find Common Free Slots", type="secondary"):
+                    with st.spinner("Analyzing schedules..."):
+                        bean_diary = get_agent_diary(BEAN_URL)
+                        joy_diary = get_agent_diary(JOY_URL)
+                        
+                        if bean_diary and joy_diary:
+                            bean_schedule = bean_diary.get("diary", {})
+                            joy_schedule = joy_diary.get("diary", {})
+                            
+                            # Determine how many days to check
+                            days_to_check = 3 if "3" in date_option else (7 if "7" in date_option else 10)
+                            
+                            # Find common free slots
+                            common_free = []
+                            for date_str in list(bean_schedule.keys())[:days_to_check]:
+                                if date_str in joy_schedule:
+                                    # Get all busy times for both
+                                    bean_busy = {apt["time"] for apt in bean_schedule[date_str]["appointments"]}
+                                    joy_busy = {apt["time"] for apt in joy_schedule[date_str]["appointments"]}
+                                    
+                                    # Check common 2-hour slots
+                                    two_hour_slots = [
+                                        "08:00-10:00", "09:00-11:00", "10:00-12:00", "11:00-13:00",
+                                        "12:00-14:00", "13:00-15:00", "14:00-16:00", "15:00-17:00",
+                                        "16:00-18:00", "17:00-19:00"
+                                    ]
+                                    
+                                    for slot in two_hour_slots:
+                                        start, end = slot.split("-")
+                                        # Check if any appointment overlaps with this slot
+                                        bean_free = not any(time_overlaps(apt["time"], start, end) for apt in bean_schedule[date_str]["appointments"])
+                                        joy_free = not any(time_overlaps(apt["time"], start, end) for apt in joy_schedule[date_str]["appointments"])
+                                        
+                                        if bean_free and joy_free:
+                                            common_free.append({
+                                                "Date": date_str,
+                                                "Day": bean_schedule[date_str]["day"],
+                                                "Time Slot": slot,
+                                                "Duration": "2 hours"
+                                            })
+                            
+                            if common_free:
+                                st.success(f"🎉 Found {len(common_free)} common free 2-hour slots!")
+                                df = pd.DataFrame(common_free)
+                                st.dataframe(df, use_container_width=True, hide_index=True)
+                            else:
+                                st.warning("⚠️ No common free 2-hour slots found in selected date range.")
+                        else:
+                            st.error("Failed to fetch diaries")
+            
+            st.markdown("---")
+            st.subheader("🚀 Auto-Schedule Match")
             st.markdown("""
-            Click the button below to start the intelligent scheduling process.
+            Let the AI organizer automatically find and book the best time slot.
             The Organizer will:
             1. Query both agents for their 10-day schedules
             2. Check availability for 2-hour badminton slots
@@ -413,6 +537,133 @@ python agents/joy/joy_agent.py
             )
         else:
             st.info("No scheduling results yet. Go to 'Schedule Match' tab to schedule a badminton match!")
+    
+    with tab5:
+        st.header("🧪 Test Data Management")
+        
+        st.markdown("""
+        Use these tools to manage test data for the agents. You can reset diaries to their default 
+        state or view the guaranteed common free slots.
+        """)
+        
+        st.markdown("---")
+        
+        # Show guaranteed common slots
+        st.subheader("🔒 Guaranteed Common Free Slots")
+        st.info("""
+        Both agents have been configured with a **guaranteed 2-hour free slot** every day:
+        
+        **Time**: 14:00 - 16:00 (2:00 PM - 4:00 PM)
+        
+        This ensures that the scheduling algorithm will always find at least one common slot 
+        for all 10 days. Other slots may also be available depending on flexible/leisure activities.
+        """)
+        
+        st.markdown("---")
+        
+        # Reset buttons
+        st.subheader("🔄 Reset Agent Diaries")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("#### 🎭 Mr. Bean")
+            if bean_online:
+                if st.button("🔄 Reset Bean's Diary", key="reset_bean"):
+                    try:
+                        response = requests.post(f"{BEAN_URL}/reset_diary", timeout=5)
+                        if response.status_code == 200:
+                            st.success("✅ Bean's diary reset successfully!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to reset diary")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+            else:
+                st.warning("⚠️ Agent offline")
+        
+        with col2:
+            st.markdown("#### 😊 Mr. Joy")
+            if joy_online:
+                if st.button("🔄 Reset Joy's Diary", key="reset_joy"):
+                    try:
+                        response = requests.post(f"{JOY_URL}/reset_diary", timeout=5)
+                        if response.status_code == 200:
+                            st.success("✅ Joy's diary reset successfully!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to reset diary")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+            else:
+                st.warning("⚠️ Agent offline")
+        
+        with col3:
+            st.markdown("#### 🔄 Reset Both")
+            if bean_online and joy_online:
+                if st.button("🔄 Reset All Diaries", type="primary", key="reset_all"):
+                    with st.spinner("Resetting all diaries..."):
+                        try:
+                            bean_response = requests.post(f"{BEAN_URL}/reset_diary", timeout=5)
+                            joy_response = requests.post(f"{JOY_URL}/reset_diary", timeout=5)
+                            
+                            if bean_response.status_code == 200 and joy_response.status_code == 200:
+                                st.success("🎉 All diaries reset successfully!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("❌ Failed to reset some diaries")
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+            else:
+                st.warning("⚠️ Both agents must be online")
+        
+        st.markdown("---")
+        
+        # Info about schedule configuration
+        st.subheader("📊 Schedule Configuration Info")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**🎭 Mr. Bean's Typical Schedule:**")
+            st.code("""
+08:00-09:00: Breakfast (flexible)
+09:00-10:00: Morning walk (leisure)
+10:00-12:00: Work (fixed)
+12:00-13:00: Lunch (flexible)
+13:00-14:00: Quick errands (leisure)
+14:00-16:00: FREE (guaranteed)
+16:00-17:00: Tea time (flexible)
+17:00-18:00: Hobbies (leisure)
+18:00-19:00: Dinner prep (flexible)
+            """)
+        
+        with col2:
+            st.markdown("**😊 Mr. Joy's Typical Schedule:**")
+            st.code("""
+08:00-09:00: Yoga (leisure)
+09:00-10:00: Breakfast (flexible)
+10:00-12:00: Client meetings (fixed)
+12:00-13:00: Lunch (flexible)
+13:00-14:00: Quick walk (leisure)
+14:00-16:00: FREE (guaranteed)
+16:00-17:00: Coffee (flexible)
+17:00-18:00: Reading (leisure)
+18:00-19:00: Dinner (flexible)
+            """)
+        
+        st.markdown("---")
+        
+        st.info("""
+        **Activity Types:**
+        - 📌 **Fixed**: Cannot be rescheduled (work, meetings)
+        - 🍽️ **Flexible**: Can be adjusted (meals, breaks)
+        - 🎮 **Leisure**: Can be easily rescheduled (hobbies, exercise)
+        - 🏸 **Booked**: New appointments made by the system
+        """)
 
 # Run the app
 if __name__ == "__main__":
