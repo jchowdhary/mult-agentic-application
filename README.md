@@ -2,9 +2,9 @@
 
 A sophisticated multi-agent AI system that intelligently coordinates appointment scheduling between two people to find a common time for a badminton match.
 
-![Multi-Agent Badminton Appointment Scheduler](https://github.com/jchowdhary/financialAgenticAI/blob/main/screenshot.png)
+![Multi-Agent Badminton Appointment Scheduler](https://github.com/jchowdhary/mult-agentic-application/blob/main/MultiAgentScheduler.png)
 
-*The image shows analyst recommendations from firms like Goldman Sachs, Morgan Stanley, and JPMorgan, along with recent news about HCL's partnerships and earnings reports.*
+*The image shows multi agentic badminton appointment scheduler where the organiser(langragoh) is coordinating with Mr Bean(A2A & Groq) and Mr Joy(CrewAI with Groq) to schedule a Badminton match based on their common availability. This agentic application will fetch, Cordinate, Match and Book Slot for Badminton match without Human intervention*
 
 ## 🎯 Overview
 
