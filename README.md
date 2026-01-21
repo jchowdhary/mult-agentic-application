@@ -5,9 +5,9 @@ A sophisticated multi-agent AI system that intelligently coordinates appointment
 ## 🎯 Overview
 
 This project demonstrates **multi-agent collaboration** using three different AI frameworks:
-- **Google Gemini** (for Mr. Bean's agent)
-- **CrewAI** (for Mr. Joy's agent)
-- **LangGraph** (for the Organizer agent)
+- **Groq (Llama 3.3) + A2A Protocol** (for Mr. Bean's agent)
+- **CrewAI + Groq** (for Mr. Joy's agent)
+- **LangGraph + Gemini** (for the Organizer agent)
 
 The system manages 10-day appointment diaries (8 AM - 7 PM) with leisure time, meal times, and fixed appointments, then intelligently finds common 2-hour slots for a badminton match.
 
@@ -99,16 +99,16 @@ Visit: http://localhost:8501
 ## 🎭 The Agents
 
 ### 🎩 Mr. Bean Agent
-- **Framework**: Google Gemini API
+- **Framework**: Groq (Llama 3.3) + A2A Protocol
 - **Port**: 8001
 - **Schedule**: Work, leisure, meals, hobbies
-- **Special**: Uses AI to evaluate leisure time flexibility
+- **Special**: Uses Groq AI to intelligently evaluate availability with A2A agent card
 
 ### 😊 Mr. Joy Agent
-- **Framework**: CrewAI
-- **Port**: 8002
+- **Framework**: CrewAI + Groq LLM
+- **Port**: 8002  
 - **Schedule**: Business meetings, gym, yoga, family time
-- **Special**: CrewAI task-based availability checking
+- **Special**: Direct availability checking (Groq AI-ready)
 
 ### 🏸 Organizer Agent
 - **Framework**: LangGraph
@@ -195,9 +195,9 @@ curl http://localhost:8002/diary
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Mr. Bean Agent | Google Gemini | LLM for schedule management |
-| Mr. Joy Agent | CrewAI | Multi-agent framework |
-| Organizer | LangGraph | Workflow orchestration |
+| Mr. Bean Agent | Groq + A2A | AI-powered schedule management |
+| Mr. Joy Agent | CrewAI + Groq | Multi-agent framework |
+| Organizer | LangGraph + Gemini | Workflow orchestration |
 | Web Interface | Streamlit | Interactive dashboard |
 | API Framework | FastAPI | REST API server |
 | Server | Uvicorn | ASGI server |
@@ -229,12 +229,22 @@ multi-agent-collaboration/
 
 ### Environment Variables (.env)
 ```bash
-GOOGLE_API_KEY=your_api_key_here
+# Required API Keys
+GOOGLE_API_KEY=your_google_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+OPENAI_API_KEY=dummy_value_required_by_crewai
+
+# Optional Port Configuration
 BEAN_AGENT_PORT=8001
 JOY_AGENT_PORT=8002
 ORGANIZER_AGENT_PORT=8003
 WEB_APP_PORT=8501
 ```
+
+**API Key Notes:**
+- **GOOGLE_API_KEY**: Get from [Google AI Studio](https://makersuite.google.com/app/apikey) - Used by Organizer agent
+- **GROQ_API_KEY**: Get from [Groq Console](https://console.groq.com/keys) - Used by Bean & Joy agents
+- **OPENAI_API_KEY**: CrewAI requires this variable but doesn't use it. Set to any dummy value (e.g., "sk-dummy")
 
 ---
 
