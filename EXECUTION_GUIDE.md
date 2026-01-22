@@ -94,7 +94,7 @@ cat .env
 
 Should show:
 ```
-GOOGLE_API_KEY=AIzaSyCNY3spvq84_n_-FRuAx2creU8BXoZrAnc
+GOOGLE_API_KEY=xxxxxx
 ```
 
 ---
@@ -365,10 +365,10 @@ pip install --upgrade -r requirements.txt
 cat .env
 
 # Should show:
-# GOOGLE_API_KEY=AIzaSyCNY3spvq84_n_-FRuAx2creU8BXoZrAnc
+# GOOGLE_API_KEY=xxxxxxx  # your google api key should go here
 
 # If missing, recreate it:
-echo "GOOGLE_API_KEY=AIzaSyCNY3spvq84_n_-FRuAx2creU8BXoZrAnc" > .env
+echo "GOOGLE_API_KEY=xxxxxxx  # your google api key should go here" > .env
 ```
 
 ---
